@@ -3,6 +3,15 @@ import numpy as np
 from cv2 import pyrDown
 
 
+def downSample(fullSize):
+    """
+    Down sample full size image into a grayscale image by averaging 2x2 block
+    :param fullSize: raw file in ndarray format
+    :return: grayscale image
+    """
+    return fullSize[0::2, 0::2] + fullSize[1::2, 0::2] + fullSize[0::2, 1::2] + fullSize[1::2, 1::2] // 4
+
+
 def gaussian_pyramid(image, size_list=None):
     """
     根据输入图像和指定的缩小倍数创建高斯金字塔。
@@ -23,7 +32,7 @@ def gaussian_pyramid(image, size_list=None):
 
 
 def split(templet, size):
-    return blocks
+    return
 
 
 def offset(tmp_block, reference, init_offset=None):
@@ -49,7 +58,3 @@ def alignment(reference, templet, range_list=None):
         offset = offset(blocks, ref_layer, offset)
     # 返回偏移量矩阵
     return offset
-
-
-if __name__ == "__main__":
-    img = np.random.randint(low=0, high=255, size=(3000, 3000), dtype="uint8")
