@@ -1,60 +1,58 @@
 import cv2
+from cv2 import pyrDown, matchTemplate, minMaxLoc
+
 import numpy as np
-from cv2 import pyrDown
+from numpy.lib.stride_tricks import as_strided
 
 
 def downSample(fullSize):
     """
-    Down sample full size image into a grayscale image by averaging 2x2 block
+    将拜耳RAW图进行平均，转化成灰度图
+
     :param fullSize: raw file in ndarray format
-    :return: grayscale image
+    :return: 平均后的灰度图
     """
     return fullSize[0::2, 0::2] + fullSize[1::2, 0::2] + fullSize[0::2, 1::2] + fullSize[1::2, 1::2] // 4
 
 
-def gaussian_pyramid(image, size_list=None):
+def get_tiles(image, tile_size):
     """
-    根据输入图像和指定的缩小倍数创建高斯金字塔。
+    将图像划分为图块
+
+    :param image: 被划分的图像
+    :param tile_size: 图块大小
+    :return: 被划分的图块
+    """
+    assert image.shape[0] % tile_size == 0
+    tiles_num = image.shape[0] // tile_size
+    tiles = image.reshape((tiles_num, tiles_num, tile_size, tile_size))
+    return tiles
+
+
+def gaussian_pyramid(image, sampling_ratios=[1, 2, 4, 4]):
+    """
+    创建四层从粗到细的高斯金字塔。
 
     :param image: 输入图像
-    :param size_list: 每层相对上层缩小的倍数
+    :param sampling_ratios: 每层相对上层缩小的倍数
     :return: ndarray list
     """
-    if size_list is None:
-        size_list = [4, 2, 4]
-    _pyr = [image]
-    cur = image
-    for size in size_list:
-        for _ in range(size // 2):
-            cur = pyrDown(src=cur)
-        _pyr.append(cur)
-    return _pyr
+    current = image
+    pyramid = []
+    for size in sampling_ratios:
+        if size == 1:
+            pyramid.append(current)
+        else:
+            for _ in range(size // 2):
+                current = pyrDown(src=current, borderType=cv2.BORDER_REFLECT)
+            pyramid.append(current)
+    return pyramid[::-1]
 
 
-def split(templet, size):
-    return
-
-
-def offset(tmp_block, reference, init_offset=None):
-    return offset
-
-
-def alignment(reference, templet, range_list=None):
-    """
-    计算两个图像间的偏移量
-
-    :param reference: 参考图像
-    :param templet: 需要对齐的图像
-    :param range_list: 每层的最大偏移量
-    :return: 需要对其图像中每个像素的偏移量(x, y) [n*n*2]
-    """
-    ref_pry = gaussian_pyramid(reference, [4, 2, 4])
-    tmp_pry = gaussian_pyramid(templet, [4, 2, 4])
-    offset = []
-    for ref_layer, tmp_layer in zip(ref_pry, tmp_pry):
-        # 划分tmp layer
-        blocks = split(tmp_layer, (16, 16))
-        # 对每个block计算偏移量
-        offset = offset(blocks, ref_layer, offset)
-    # 返回偏移量矩阵
-    return offset
+if __name__ == "__main__":
+    img = np.random.randint(low=0, high=255, size=(759, 1012), dtype="uint8")
+    # print(get_tiles(img, 16).shape)
+    pyr = gaussian_pyramid(img)
+    for level in pyr:
+        print(level.shape)
+    print([1] + [1, 2, 4, 4][:0:-1])
