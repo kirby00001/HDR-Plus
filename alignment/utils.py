@@ -15,17 +15,23 @@ def downSample(fullSize):
     return fullSize[0::2, 0::2] + fullSize[1::2, 0::2] + fullSize[0::2, 1::2] + fullSize[1::2, 1::2] // 4
 
 
-def get_tiles(image, tile_size):
+def get_tiles(image, tile_size, step):
     """
-    将图像划分为图块
+    将图像划分为图块, 图块间存在重叠部分
 
     :param image: 被划分的图像
     :param tile_size: 图块大小
+    :param step: 划分块时的位移大小 s
     :return: 被划分的图块
     """
-    assert image.shape[0] % tile_size == 0
-    tiles_num = image.shape[0] // tile_size
-    tiles = image.reshape((tiles_num, tiles_num, tile_size, tile_size))
+    image_shape = image.shape
+    tile_shape = (tile_size, tile_size)
+    shape = tuple((np.array(image_shape) - tile_size) // step + 1) + tile_shape
+
+    image_strides = image.strides
+    strides = tuple(np.array(image_strides) * step) + image_strides
+    tiles = as_strided(image, shape=shape, strides=strides)
+
     return tiles
 
 
@@ -51,8 +57,7 @@ def gaussian_pyramid(image, sampling_ratios=[1, 2, 4, 4]):
 
 if __name__ == "__main__":
     img = np.random.randint(low=0, high=255, size=(759, 1012), dtype="uint8")
-    # print(get_tiles(img, 16).shape)
-    pyr = gaussian_pyramid(img)
-    for level in pyr:
-        print(level.shape)
-    print([1] + [1, 2, 4, 4][:0:-1])
+    print(get_tiles(img, tile_size=16, step=8).shape)
+    # pyr = gaussian_pyramid(img)
+    # for level in pyr:
+    #     print(level.shape)
