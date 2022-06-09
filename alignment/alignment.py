@@ -1,8 +1,4 @@
-from re import A
-from turtle import up
-import cv2
 import numpy as np
-from cv2 import pyrDown
 from .utils import get_tiles, gaussian_pyramid, match_templates, select_offsets, compute_l1_distance_with_pre_alinment
 
 

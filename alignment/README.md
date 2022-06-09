@@ -1,8 +1,23 @@
+<!--
+ * @Author: kirby00001 t3273139612@hotmail.com
+ * @Date: 2022-06-07 14:40:24
+ * @LastEditors: kirby00001 t3273139612@hotmail.com
+ * @LastEditTime: 2022-06-10 00:52:00
+ * @FilePath: \HDRplus\alignment\README.md
+ * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+-->
 # 对齐
 
 - [X]  选取参考帧
 - [X]  处理RAW图
-- [ ]  高斯金字塔，模板匹配
+- [ ]  高斯金字塔，模板匹配:
+  - [X]  构造从粗到细的高斯金字塔
+  - [X]  在每层金字塔上进行基于瓦片的模板匹配
+    - [X]  划分图块
+    - [X]  上采样初始化运动项链
+    - [X]  根据上采样结果，计算搜索范围
+    - [X]  进行模板匹配，计算运动向量
+  - [ ]  从粗到细连续计算运动向量
 
 ## 1. 选取参考帧
 
@@ -48,4 +63,4 @@ $$
 - n是块的大小
 - $(u_0,v_0)$是从较粗层级继承的初始化对齐
 
-![img.png](img.png)
+![img.png](../misc/img.png)
