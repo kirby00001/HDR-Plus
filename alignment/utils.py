@@ -113,6 +113,7 @@ def match_templates(ref_tiles, search_areas, mode):
 
 
 def select_offsets(distance):
+    
     h, w, _, _ = distance.shape
     offsets = np.empty(shape=[h, w, 2], dtype=np.int32)
     for i in range(h):
