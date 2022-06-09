@@ -1,3 +1,5 @@
+import math
+
 import cv2
 from cv2 import pyrDown, matchTemplate, minMaxLoc
 
@@ -53,6 +55,42 @@ def gaussian_pyramid(image, sampling_ratios=[1, 2, 4, 4]):
                 current = pyrDown(src=current, borderType=cv2.BORDER_REFLECT)
             pyramid.append(current)
     return pyramid[::-1]
+
+
+def computeTilesDistanceL1_(ref_tiles, alt_tiles, offsets, result):
+    """
+
+    :param ref_tiles: 参考图块
+    :param alt_tiles: 备选图块
+    :param offsets: 偏移量
+    :param result: 结果
+    :return: 
+    """
+    # Dimension
+    m, n, tile_size, _ = ref_tiles.shape
+    h, w, _ = offsets.shape
+    # Loop over the aligned tiles
+    for i in range(h):
+        for j in range(w):
+            # Offset values
+            offI = offsets[i, j, 0]
+            offJ = offsets[i, j, 1]
+            # Reference index
+            ri = i * (tile_size // 2)
+            rj = j * (tile_size // 2)
+            # Deduce the position of the corresponding tiles
+            di = ri + int(offI + (0.5 if offI >= 0 else -0.5))
+            dj = rj + int(offJ + (0.5 if offJ >= 0 else -0.5))
+            # Clip the position
+            di = 0 if di < 0 else (m - 1 if di > m - 1 else di)
+            dj = 0 if dj < 0 else (n - 1 if dj > n - 1 else dj)
+            # Compute the distance
+            dst = 0
+            for p in range(tile_size):
+                for q in range(tile_size):
+                    dst += math.fabs(ref_tiles[ri, rj, p, q] - alt_tiles[di, dj, p, q])
+            # Store the result
+            result[i, j] = dst
 
 
 if __name__ == "__main__":
