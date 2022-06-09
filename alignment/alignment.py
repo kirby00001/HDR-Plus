@@ -3,7 +3,7 @@ from turtle import up
 import cv2
 import numpy as np
 from cv2 import pyrDown
-from .utils import get_tiles, gaussian_pyramid, match_templates, select_offsets
+from .utils import get_tiles, gaussian_pyramid, match_templates, select_offsets, compute_l1_distance_with_pre_alinment
 
 
 def select_reference_frame(burstPath, imageList, options):
@@ -21,7 +21,7 @@ def gaussian_align(ref_image,
                    tile_size,
                    search_radius_list=[4, 4, 2, 1],
                    sampling_ratios=[1, 2, 4, 4],
-                   norm_list=["L2", "L2", "L2", "L1"]):
+                   norm_list=["L2", "L2", "L2", "L2"]):
     """
     四层从粗到细的高斯金字塔对齐
 
@@ -124,14 +124,17 @@ def up_sample_previous_alignment(ref_level, alt_level, pre_align, tile_size, pre
     """
     # 扩大运动向量规模
     pre_align *= up_sample_ratio
-    # 当前层图块的数量/上一层图块的数量
+    # 运动向量矩阵的扩大倍数 = 当前层图块的数量/上一层图块的数量
     repeat_ratio = up_sample_ratio // (tile_size // pre_tile_size)
-    up_sampled_align = pre_align.repeat(repeat_ratio, axis=0).repeat(repeat_ratio, axis=1)
-    h, w = up_sampled_align.shape[0], up_sampled_align.shape[1]
+    # 扩大运动向量矩阵
+    up_sampled_alignment = pre_align.repeat(repeat_ratio, axis=0).repeat(repeat_ratio, axis=1)
+    # 上采样后，运动向量矩阵的高和宽
+    h, w = up_sampled_alignment.shape[0], up_sampled_alignment.shape[1]
     # 在运动向量边界填充，解决分块计算邻居时的边界问题
-    padded_pre_align = np.pad(pre_align, pad_width=((1, ), (1, ), (0, )), mode='edge')
+    padded_pre_alignment = np.pad(pre_align, pad_width=((1, 1), (1, 1), (0, 0)), mode='edge')
     # 选择三个最临近的块当作候选块
     tile = np.empty(shape=(repeat_ratio, repeat_ratio, 2, 2), dtype=np.int)
+    # 等分为四部分
     index = repeat_ratio // 2
     # 上、左
     tile[:index, :index] = [[-1, 0], [0, -1]]
@@ -142,45 +145,48 @@ def up_sample_previous_alignment(ref_level, alt_level, pre_align, tile_size, pre
     # 下、右
     tile[index:, index:] = [[1, 0], [0, 1]]
     # 从一个图块扩大到整张图的大小
-    neighbors_mask = np.tile(tile, (up_sampled_align.shape[0] // repeat_ratio,
-                                    up_sampled_align.shape[1] // repeat_ratio, 1, 1))
+    neighbors_mask = np.tile(tile, (up_sampled_alignment.shape[0] // repeat_ratio,
+                                    up_sampled_alignment.shape[1] // repeat_ratio, 1, 1))
     # 上下邻居的索引
-    vertical_i = np.repeat(np.clip(2 + np.arange(h) // repeat_ratio + neighbors_mask[:, 0, 0, 0], 0,
-                                   padded_pre_align.shape[0] - 1).reshape(h, 1),
-                           w,
-                           axis=1).reshape(h * w)
-    vertical_j = np.repeat(np.clip(2 + np.arange(w) // repeat_ratio + neighbors_mask[0, :, 0, 1], 0,
-                                   padded_pre_align.shape[1] - 1).reshape(1, w),
-                           h,
-                           axis=0).reshape(h * w)
+    vertical_i = (1 + (np.arange(h) // repeat_ratio) + neighbors_mask[:, 0, 0, 0]).clip(
+        0, padded_pre_alignment.shape[0] - 1).reshape(h, 1).repeat(w, axis=1).reshape(h * w)
+    vertical_j = (1 + (np.arange(w) // repeat_ratio) + neighbors_mask[:, 0, 0, 1]).clip(
+        0, padded_pre_alignment.shape[1] - 1).reshape(1, w).repeat(h, axis=0).reshape(h * w)
     # 左右邻居的索引
-    horizontal_i = np.repeat(np.clip(2 + np.arange(h) // repeat_ratio + neighbors_mask[:, 0, 1, 0],
-                                     0, padded_pre_align.shape[0] - 1).reshape(h, 1),
-                             w,
-                             axis=1).reshape(h * w)
-    horizontal_j = np.repeat(np.clip(2 + np.arange(w) // repeat_ratio + neighbors_mask[0, :, 1, 1],
-                                     0, padded_pre_align.shape[1] - 1).reshape(1, w),
-                             h,
-                             axis=0).reshape(h * w)
+    horizontal_i = (1 + (np.arange(h) // repeat_ratio) + neighbors_mask[:, 0, 1, 0]).clip(
+        0, padded_pre_alignment.shape[0] - 1).reshape(h, 1).repeat(w, axis=1).reshape(h * w)
+    horizontal_j = (1 + (np.arange(w) // repeat_ratio) + neighbors_mask[:, 0, 1, 1]).clip(
+        0, padded_pre_alignment.shape[1] - 1).reshape(1, w).repeat(h, axis=0).reshape(h * w)
     # 提取出对应的邻居的运动向量
-    vertical_neighbour = padded_pre_align[vertical_i, vertical_j].reshape((h, w, 2))
-    horizontal_neighbour = padded_pre_align[horizontal_i, horizontal_j].reshape((h, w, 2))
+    vertical_neighbours = padded_pre_alignment[vertical_i, vertical_j].reshape((h, w, 2))
+    horizontal_neighbours = padded_pre_alignment[horizontal_i, horizontal_j].reshape((h, w, 2))
     # 获取所有可能的参考和候选图块
     ref_tiles = get_tiles(ref_level, tile_size, 1)
     alt_tiles = get_tiles(alt_level, tile_size, 1)
-    # TODO 计算参考图块和候选图块的距离
-    d0 = computeTilesDistanceL1_(ref_tiles, alt_tiles, up_sampled_align).reshape(h * w)
-    d1 = computeTilesDistanceL1_(ref_tiles, alt_tiles, vertical_neighbour).reshape(h * w)
-    d2 = computeTilesDistanceL1_(ref_tiles, alt_tiles, horizontal_neighbour).reshape(h * w)
-    # TODO 构建候选运动向量
-    candidate_align = np.empty((h * w, 3, 2))
-    candidate_align[:, 0, :] = up_sampled_align.reshape(h * w, 2)
-    candidate_align[:, 1, :] = vertical_neighbour.reshape(h * w, 2)
-    candidate_align[:, 2, :] = horizontal_neighbour.reshape(h * w, 2)
-    # TODO 选出运动项链，通过最小化L1距离
-    selected_align = candidate_align[np.arange(h * w),
-                                     np.argmin([d0, d1, d2], axis=0)].reshape((h, w, 2))
-    return up_sampled_align
+    # 根据偏移量，计算参考图块和候选图块的L1距离
+    d0 = compute_l1_distance_with_pre_alinment(ref_tiles, alt_tiles,
+                                               up_sampled_alignment).reshape(h * w)
+    d1 = compute_l1_distance_with_pre_alinment(ref_tiles, alt_tiles,
+                                               vertical_neighbours).reshape(h * w)
+    d2 = compute_l1_distance_with_pre_alinment(ref_tiles, alt_tiles,
+                                               horizontal_neighbours).reshape(h * w)
+    # 构建候选运动向量
+    candidate_alignment = np.empty((h * w, 3, 2))
+    candidate_alignment[:, 0, :] = up_sampled_alignment.reshape(h * w, 2)
+    candidate_alignment[:, 1, :] = vertical_neighbours.reshape(h * w, 2)
+    candidate_alignment[:, 2, :] = horizontal_neighbours.reshape(h * w, 2)
+    # 从三个候选运动向量中，选出能最小化L1距离的运动向量
+    selected_alignment = candidate_alignment[np.arange(h * w),
+                                             np.argmin([d0, d1, d2], axis=0)].reshape((h, w, 2))
+    # 因为划分图块时，边缘图块被忽略，没有下层的对齐，需要被初始化为0
+    final_h = ref_level.shape[0] // (tile_size // 2) - 1
+    final_w = ref_level.shape[1] // (tile_size // 2) - 1
+    if h < final_h or w < final_w:
+        final_alignmnet = np.zeros(shape=(final_h, final_w), dtype=np.int32)
+        final_alignmnet[:h, :w] = selected_alignment
+    else:
+        final_alignmnet = selected_alignment
+    return final_alignmnet
 
 
 if __name__ == "__main__":

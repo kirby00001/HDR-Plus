@@ -1,10 +1,8 @@
-from asyncio.windows_events import NULL
-from re import M
 import cv2
-import math
+from cv2 import pyrDown, matchTemplate, minMaxLoc
+
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
-from cv2 import pyrDown, matchTemplate, minMaxLoc
 
 
 def downSample(fullSize):
@@ -58,7 +56,7 @@ def gaussian_pyramid(image, sampling_ratios=[1, 2, 4, 4]):
     return pyramid[::-1]
 
 
-def computeTilesDistanceL1_(ref_tiles, alt_tiles, offsets, result):
+def compute_l1_distance_with_pre_alinment(ref_tiles, alt_tiles, offsets, result):
     """
     计算采用该偏移量后，参考图块和备选图块之间的L1距离，用作评估偏移量的指标
 
@@ -69,30 +67,36 @@ def computeTilesDistanceL1_(ref_tiles, alt_tiles, offsets, result):
     :return: 
     """
     # Dimension
-    m, n, tile_size, _ = ref_tiles.shape
     h, w, _ = offsets.shape
+    m, n, tile_size, _ = ref_tiles.shape
+    result = np.empty(shape=(h, w), dtype=np.float32)
     # 遍历所有对齐的图块
     for i in range(h):
         for j in range(w):
             # 偏移量
-            i_offset = offsets[i, j, 0]
-            j_offset = offsets[i, j, 1]
-            # 参考图块的索引
+            offset_i = offsets[i, j, 0]
+            offset_j = offsets[i, j, 1]
+            # 参考图块的索引,步长为tile_size // 2
             ref_i = i * (tile_size // 2)
             ref_j = j * (tile_size // 2)
             # 对应图块的索引
-            di = ref_i + int(i_offset + (0.5 if i_offset >= 0 else -0.5))
-            dj = ref_j + int(j_offset + (0.5 if j_offset >= 0 else -0.5))
-            # Clip the position
-            di = 0 if di < 0 else (m - 1 if di > m - 1 else di)
-            dj = 0 if dj < 0 else (n - 1 if dj > n - 1 else dj)
+            alt_i = ref_i + offset_i
+            alt_j = ref_j + offset_j
+            # 限制索引范围
+            if alt_i < 0:
+                alt_i = 0
+            elif alt_i > m - 1:
+                alt_i = m - 1
+            if alt_j < 0:
+                alt_j = 0
+            elif alt_j > n - 1:
+                alt_j = n - 1
             # 计算L1距离
-            dst = 0
-            for p in range(tile_size):
-                for q in range(tile_size):
-                    dst += math.fabs(ref_tiles[ref_i, ref_j, p, q] - alt_tiles[di, dj, p, q])
+            l1_distance = np.sum(
+                np.absolute(ref_tiles[ref_i, ref_j, :, :] - alt_tiles[alt_i, alt_j, :, :]))
             # Store the result
-            result[i, j] = dst
+            result[i, j] = l1_distance
+    return result
 
 
 def match_templates(ref_tiles, search_areas, mode):
@@ -124,3 +128,4 @@ if __name__ == "__main__":
     # pyr = gaussian_pyramid(img)
     # for level in pyr:
     #     print(level.shape)
+    print(int(0.5))
