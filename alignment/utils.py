@@ -1,5 +1,7 @@
+from turtle import st
 import cv2
 from cv2 import pyrDown, matchTemplate, minMaxLoc
+from matplotlib.pyplot import axis
 
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
@@ -113,7 +115,7 @@ def match_templates(ref_tiles, search_areas, mode):
 
 
 def select_offsets(distance):
-    
+
     h, w, _, _ = distance.shape
     offsets = np.empty(shape=[h, w, 2], dtype=np.int32)
     for i in range(h):
@@ -123,10 +125,33 @@ def select_offsets(distance):
     return offsets
 
 
+def get_aligned_tiles(image, tile_size, motion_vectors):
+    # 重叠一半瓦片划分出的瓦片矩阵的高度和宽度
+    h, w = image.shape[0] // (tile_size // 2) - 1, image.shape[1] // (tile_size // 2) - 1
+    # 有运动向量的瓦片数量: hm*wm (<= h*w)
+    hm, wm, _ = motion_vectors.shape
+    # 从图像中提取出所有可能的瓦片
+    image_tiles = get_tiles(image, tile_size, step=1)
+    # 获取施加运动向量后的瓦片索引
+    motion_i = ((np.arange(hm) * tile_size // 2).reshape(hm, 1).repeat(wm, axis=1) +
+                motion_vectors[:, :, 0]).clip(0, image.shape[0] - tile_size)
+    motion_j = ((np.arange(wm) * tile_size // 2).reshape(1, wm).repeat(hm, axis=0) +
+                motion_vectors[:, :, 1]).clip(0, image.shape[1] - tile_size)
+    # 没有施加运动向量的瓦片索引
+    i = (np.arange(h) * tile_size // 2).reshape(h, 1).repeat(w, axis=1)
+    j = (np.arange(w) * tile_size // 2).reshape(1, w).repeat(h, axis=0)
+    # 没有对应运动向量的会保持原位置
+    i[:motion_i.shape[0], :motion_i.shape[1]] = motion_i
+    j[:motion_j.shape[0], :motion_j.shape[1]] = motion_j
+    # 保存有效的瓦片 (step = tileSize // 2)
+    alignedTiles = image_tiles[i.reshape(h * w), j.reshape(h * w)].reshape(
+        (h, w, tile_size, tile_size))
+    return alignedTiles
+
+
 if __name__ == "__main__":
     img = np.random.randint(low=0, high=255, size=(759, 1012), dtype="uint8")
     print(get_tiles(img, tile_size=16, step=8).shape)
-    # pyr = gaussian_pyramid(img)
-    # for level in pyr:
-    #     print(level.shape)
-    print(int(0.5))
+    pyr = gaussian_pyramid(img)
+    for level in pyr:
+        print(level.shape)

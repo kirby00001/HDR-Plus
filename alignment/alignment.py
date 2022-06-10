@@ -1,5 +1,7 @@
+from time import monotonic_ns
+from webbrowser import get
 import numpy as np
-from .utils import get_tiles, gaussian_pyramid, match_templates, select_offsets, compute_l1_distance_with_pre_alinment
+from .utils import get_tiles, gaussian_pyramid, match_templates, select_offsets, compute_l1_distance_with_pre_alinment, get_aligned_tiles
 
 
 def select_reference_frame(burstPath, imageList, options):
@@ -51,6 +53,12 @@ def gaussian_align(ref_image,
                                         pre_align=motion_vector,
                                         pre_tile_size=tile_size,
                                         up_sample_ratio=up_sample_ratio)
+        # 根据运动向量，得到对齐后的备选图块
+        aligned_alt_tiles = get_aligned_tiles(alt_image, tile_size, motion_vector)
+        # 保存运动向量和对齐后的图块
+        motion_vectors[i] = motion_vector
+        aligned_tiles[i + 1] = aligned_alt_tiles
+    return motion_vectors, aligned_tiles
 
 
 def level_align(ref_level,
