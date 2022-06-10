@@ -1,4 +1,5 @@
 from time import monotonic_ns
+from weakref import ref
 from webbrowser import get
 import numpy as np
 from .utils import get_tiles, gaussian_pyramid, match_templates, select_offsets, compute_l1_distance_with_pre_alinment, get_aligned_tiles
@@ -12,6 +13,42 @@ def select_reference_frame(burstPath, imageList, options):
     :return:
     """
     return
+
+
+def burst_align(images, ref_index, tile_size):
+    """
+    对齐burst RAW图
+    
+    :param images: 所有图像
+    :param ref_index: 参考图像的索引
+    :param tile_size: 图块大小
+    """
+    h, w = images[ref_index].shape
+    # 填充图像，让图块能包括所有像素
+    padding_patches_h = (tile_size - h % (tile_size)) * (h % (tile_size) != 0)
+    padding_patched_w = (tile_size - w % (tile_size)) * (w % (tile_size) != 0)
+    # 零填充，防止图像边缘产生伪影
+    padding_overlap_h = padding_overlap_w = tile_size // 2
+    # 上
+    padding_top = padding_overlap_h
+    # 下
+    padding_bottom = padding_overlap_h + padding_patches_h
+    # 左
+    padding_left = padding_overlap_w
+    # 右
+    padding_right = padding_overlap_w + padding_patched_w
+    # 填充图像
+    padded_images = [
+        np.pad(im, ((padding_top, padding_bottom), (padding_left, padding_right)), 'symmetric')
+        for im in images
+    ]
+    # 选择参考图像和备选图像
+    ref_image = padded_images[ref_index]
+    alt_images = [image for i, image in enumerate(padded_images) if i != ref_index]
+    # 进行高斯金字塔对齐
+    motion_vectors, aligned_tiles = gaussian_align(ref_image, alt_images, tile_size)
+    padding = (padding_top,padding_bottom,padding_left,padding_right)
+    return aligned_tiles,padding
 
 
 def gaussian_align(ref_image,
@@ -29,7 +66,7 @@ def gaussian_align(ref_image,
     :param search_radius_list: 金字塔每层的搜索半径
     :param norm_list: 金字塔每层的标准化方式
     :param sampling_ratios: 每层的采样倍率
-    :return:
+    :return: 所有候选图的运动向量和所有对齐后的图块
     """
     up_sample_ratios = [1] + sampling_ratios[:0:-1]
     # 划分参考图像

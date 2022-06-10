@@ -102,6 +102,14 @@ def compute_l1_distance_with_pre_alinment(ref_tiles, alt_tiles, offsets, result)
 
 
 def match_templates(ref_tiles, search_areas, mode):
+    """
+    通过模板匹配计算距离
+
+    :param ref_tiles: 参考图块
+    :param search_areas: 搜索范围
+    :param mode: 距离计算方式L1或L2
+    :return: 计算出的距离
+    """
     if mode == "L2":
         mode = cv2.TM_SQDIFF
     h, w, _, _ = ref_tiles.shape
@@ -115,7 +123,12 @@ def match_templates(ref_tiles, search_areas, mode):
 
 
 def select_offsets(distance):
-
+    """
+    根据计算出的距离选取偏移量
+    
+    :param distance: 模板匹配中计算的距离
+    :return: 偏移量
+    """
     h, w, _, _ = distance.shape
     offsets = np.empty(shape=[h, w, 2], dtype=np.int32)
     for i in range(h):
@@ -126,6 +139,14 @@ def select_offsets(distance):
 
 
 def get_aligned_tiles(image, tile_size, motion_vectors):
+    """
+    根据图片和运动向量，计算对齐后的图块
+    
+    :param image: 待对齐图片
+    :param tile_size: 图块大小
+    :param motion_vectors: 运动向量
+    :return: 对齐后的图块
+    """
     # 重叠一半瓦片划分出的瓦片矩阵的高度和宽度
     h, w = image.shape[0] // (tile_size // 2) - 1, image.shape[1] // (tile_size // 2) - 1
     # 有运动向量的瓦片数量: hm*wm (<= h*w)
