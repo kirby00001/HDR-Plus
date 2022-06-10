@@ -1,7 +1,5 @@
-from turtle import st
 import cv2
 from cv2 import pyrDown, matchTemplate, minMaxLoc
-from matplotlib.pyplot import axis
 
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
