@@ -1,4 +1,3 @@
-from math import dist
 import numpy as np
 from .utils import down_sample, get_tiles, gaussian_pyramid, match_templates, select_offsets, compute_l1_distance_with_pre_alinment, get_aligned_tiles, compute_subpixel_offset
 
